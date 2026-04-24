@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>Lager App</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+
+<style>
+body { font-family: Arial; margin: 0; }
+nav {
+  display: flex;
+  background: #333;
+}
+nav button {
+  flex: 1;
+  padding: 15px;
+  color: white;
+  background: none;
+  border: none;
+  font-size: 16px;
+}
+nav button.active {
+  background: #555;
+}
+.tab { display: none; padding: 10px; }
+input, select, button {
+  width: 100%;
+  padding: 12px;
+  margin: 5px 0;
+  font-size: 16px;
+}
+.card {
+  border: 1px solid #ccc;
+  padding: 10px;
+  margin: 10px 0;
+}
+</style>
+</head>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#333333">
+<body>
+
+<nav>
+  <button onclick="showTab('inventur')">📦 Inventur</button>
+  <button onclick="showTab('eingang')">➕ Eingang</button>
+  <button onclick="showTab('admin')">📊 Bestand</button>
+  <button onclick="showTab('export')">📤 Export</button>
+</nav>
+
+<div id="inventur" class="tab"></div>
+<div id="eingang" class="tab"></div>
+<div id="admin" class="tab"></div>
+<div id="export" class="tab"></div>
+
+<script>
+const supabase = window.supabase.createClient(
+  "https://v0-lager-app.vercel.app.supabase.co",
+  "hptmgzugsfxbkxayoqwk"
+);
+
+let artikel = [];
+let bewegungen = [];
+
+function showTab(id) {
+  document.querySelectorAll(".tab").forEach(t => t.style.display="none");
+  document.getElementById(id).style.display = "block";
+
+  if (id === "inventur") renderInventur();
+  if (id === "eingang") renderEingang();
+  if (id === "admin") renderAdmin();
+  if (id === "export") renderExport();
+}
+
+// ---------------- LOAD ----------------
+async function load() {
+  artikel = (await supabase.from("artikel").select("*")).data;
+  bewegungen = (await supabase.from("lagerbewegungen").select("*")).data;
+
+  showTab("inventur");
+}
+
+// ---------------- HELPER ----------------
+function bestand(id) {
+  return bewegungen
+    .filter(b => b.artikel_id === id)
+    .reduce((sum, b) => sum + b.menge, 0);
+}
+
+// ---------------- INVENTUR ----------------
+function renderInventur() {
+  let html = `<h2>📦 Inventur</h2>`;
+  
+  artikel.forEach(a => {
+    html += `
+    <div class="card">
+      <b>${a.name}</b><br>
+      Bestand: ${bestand(a.id)}<br>
+      Ist:
+      <input type="number" onchange="inventur(${a.id}, this.value)">
+    </div>`;
+  });
+
+  document.getElementById("inventur").innerHTML = html;
+}
+
+async function inventur(id, ist) {
+  const aktuell = bestand(id);
+  const diff = ist - aktuell;
+
+  if (diff !== 0) {
+    await supabase.from("lagerbewegungen").insert({
+      artikel_id: id,
+      menge: diff,
+      typ: "inventur"
+    });
+  }
+
+  load();
+}
+
+// ---------------- WARENEINGANG ----------------
+function renderEingang() {
+  let html = `<h2>➕ Wareneingang</h2>`;
+
+  artikel.forEach(a => {
+    html += `
+    <div class="card">
+      <b>${a.name}</b><br>
+      Bestand: ${bestand(a.id)}<br>
+      <input type="number" id="m${a.id}">
+      <button onclick="buchen(${a.id})">Buchen</button>
+    </div>`;
+  });
+
+  document.getElementById("eingang").innerHTML = html;
+}
+
+async function buchen(id) {
+  const menge = document.getElementById("m"+id).value;
+
+  await supabase.from("lagerbewegungen").insert({
+    artikel_id: id,
+    menge: parseInt(menge),
+    typ: "wareneingang"
+  });
+
+  load();
+}
+
+// ---------------- ADMIN ----------------
+function renderAdmin() {
+  let html = `<h2>📊 Bestand</h2>`;
+
+  artikel.forEach(a => {
+    html += `
+    <div class="card">
+      <b>${a.name}</b><br>
+      📍 ${a.lagerplatz}<br>
+      Bestand: ${bestand(a.id)}
+    </div>`;
+  });
+
+  document.getElementById("admin").innerHTML = html;
+}
+
+// ---------------- EXPORT ----------------
+function renderExport() {
+  document.getElementById("export").innerHTML = `
+    <h2>📤 Export</h2>
+    <button onclick="exportCSV()">CSV Export</button>
+  `;
+}
+
+function exportCSV() {
+  let csv = "Name;Lagerplatz;Bestand\n";
+
+  artikel.forEach(a => {
+    csv += `${a.name};${a.lagerplatz};${bestand(a.id)}\n`;
+  });
+
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "bestand.csv";
+  a.click();
+}
+
+load();
+</script>
+
+</body>
+</html>
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js');
+}
+</script>
