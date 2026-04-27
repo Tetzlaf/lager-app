@@ -3,14 +3,23 @@
 <head>
 <meta charset="UTF-8">
 <title>Lager App</title>
+
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#333333">
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
 
 <style>
-body { font-family: Arial; margin: 0; }
+body {
+  font-family: Arial;
+  margin: 0;
+}
+
 nav {
   display: flex;
   background: #333;
 }
+
 nav button {
   flex: 1;
   padding: 15px;
@@ -18,17 +27,21 @@ nav button {
   background: none;
   border: none;
   font-size: 16px;
+  cursor: pointer;
 }
-nav button.active {
-  background: #555;
+
+.tab {
+  display: none;
+  padding: 10px;
 }
-.tab { display: none; padding: 10px; }
+
 input, select, button {
   width: 100%;
   padding: 12px;
   margin: 5px 0;
   font-size: 16px;
 }
+
 .card {
   border: 1px solid #ccc;
   padding: 10px;
@@ -36,8 +49,7 @@ input, select, button {
 }
 </style>
 </head>
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#333333">
+
 <body>
 
 <nav>
@@ -53,30 +65,44 @@ input, select, button {
 <div id="export" class="tab"></div>
 
 <script>
-const supabase = window.supabase.createClient(
-  "https://v0-lager-app.vercel.app.supabase.co",
-  "hptmgzugsfxbkxayoqwk"
+// ---------------- SUPABASE ----------------
+const client = window.supabase.createClient(
+  "https://hptmgzugsfxbkxayoqwk.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhwdG1nenVnc2Z4Ymt4YXlvcXdrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5Njc1OTEsImV4cCI6MjA5MjU0MzU5MX0.wqIL8sXUMF9E5PBdHMBcY6d6fvPeEzU93GG4PNT7h2Y"
 );
 
 let artikel = [];
 let bewegungen = [];
 
-function showTab(id) {
-  document.querySelectorAll(".tab").forEach(t => t.style.display="none");
-  document.getElementById(id).style.display = "block";
+// ---------------- TAB SYSTEM ----------------
+window.showTab = function(tab) {
+  document.querySelectorAll(".tab").forEach(el => {
+    el.style.display = "none";
+  });
 
-  if (id === "inventur") renderInventur();
-  if (id === "eingang") renderEingang();
-  if (id === "admin") renderAdmin();
-  if (id === "export") renderExport();
-}
+  const target = document.getElementById(tab);
+  if (target) target.style.display = "block";
+
+  if (tab === "inventur") renderInventur();
+  if (tab === "eingang") renderEingang();
+  if (tab === "admin") renderAdmin();
+  if (tab === "export") renderExport();
+};
 
 // ---------------- LOAD ----------------
 async function load() {
-  artikel = (await supabase.from("artikel").select("*")).data;
-  bewegungen = (await supabase.from("lagerbewegungen").select("*")).data;
+  try {
+    const { data: artikelData } = await client.from("artikel").select("*");
+    const { data: bewegungenData } = await client.from("lagerbewegungen").select("*");
 
-  showTab("inventur");
+    artikel = artikelData || [];
+    bewegungen = bewegungenData || [];
+
+    showTab("admin"); // 👉 Start jetzt Bestand
+
+  } catch (err) {
+    console.error("LOAD CRASH:", err);
+  }
 }
 
 // ---------------- HELPER ----------------
@@ -88,19 +114,53 @@ function bestand(id) {
 
 // ---------------- INVENTUR ----------------
 function renderInventur() {
-  let html = `<h2>📦 Inventur</h2>`;
-  
-  artikel.forEach(a => {
+  let html = `<h2>📦 Inventur</h2>
+
+  <select id="filter_standort" onchange="filterInventur()">
+    <option value="">Alle Standorte</option>
+    ${[...new Set(artikel.map(a => a.standort || ""))].map(s => `<option value="${s}">${s}</option>`).join("")}
+  </select>
+
+  <select id="filter_lagerplatz" onchange="filterInventur()">
+    <option value="">Alle Lagerplätze</option>
+    ${[...new Set(artikel.map(a => a.lagerplatz || ""))].map(l => `<option value="${l}">${l}</option>`).join("")}
+  </select>
+
+  <div id="inventurListe"></div>`;
+
+  document.getElementById("inventur").innerHTML = html;
+
+  renderInventurListe(artikel);
+}
+
+function renderInventurListe(liste) {
+  let html = "";
+
+  liste.forEach(a => {
     html += `
     <div class="card">
-      <b>${a.name}</b><br>
+      <b>ID: ${a.id}</b><br>
+      Name: ${a.name}<br>
+      📍 ${a.lagerplatz}<br>
       Bestand: ${bestand(a.id)}<br>
       Ist:
       <input type="number" onchange="inventur(${a.id}, this.value)">
     </div>`;
   });
 
-  document.getElementById("inventur").innerHTML = html;
+  document.getElementById("inventurListe").innerHTML = html;
+}
+
+function filterInventur() {
+  const standort = document.getElementById("filter_standort").value.toLowerCase();
+  const lagerplatz = document.getElementById("filter_lagerplatz").value.toLowerCase();
+
+  const gefiltert = artikel.filter(a =>
+    (a.standort || "").toLowerCase().includes(standort) &&
+    (a.lagerplatz || "").toLowerCase().includes(lagerplatz)
+  );
+
+  renderInventurListe(gefiltert);
 }
 
 async function inventur(id, ist) {
@@ -108,7 +168,7 @@ async function inventur(id, ist) {
   const diff = ist - aktuell;
 
   if (diff !== 0) {
-    await supabase.from("lagerbewegungen").insert({
+    await client.from("lagerbewegungen").insert({
       artikel_id: id,
       menge: diff,
       typ: "inventur"
@@ -118,14 +178,14 @@ async function inventur(id, ist) {
   load();
 }
 
-// ---------------- WARENEINGANG ----------------
+// ---------------- EINGANG ----------------
 function renderEingang() {
   let html = `<h2>➕ Wareneingang</h2>`;
 
   artikel.forEach(a => {
     html += `
     <div class="card">
-      <b>${a.name}</b><br>
+      <b>ID: ${a.id}</b><br>Name: ${a.name}<br>
       Bestand: ${bestand(a.id)}<br>
       <input type="number" id="m${a.id}">
       <button onclick="buchen(${a.id})">Buchen</button>
@@ -136,9 +196,9 @@ function renderEingang() {
 }
 
 async function buchen(id) {
-  const menge = document.getElementById("m"+id).value;
+  const menge = document.getElementById("m" + id).value;
 
-  await supabase.from("lagerbewegungen").insert({
+  await client.from("lagerbewegungen").insert({
     artikel_id: id,
     menge: parseInt(menge),
     typ: "wareneingang"
@@ -147,20 +207,102 @@ async function buchen(id) {
   load();
 }
 
-// ---------------- ADMIN ----------------
+// ---------------- ADMIN + ARTIKEL HINZUFÜGEN ----------------
 function renderAdmin() {
-  let html = `<h2>📊 Bestand</h2>`;
+  let html = `<h2>📊 Bestand</h2>
 
-  artikel.forEach(a => {
+  <input placeholder="🔍 Suche nach Name oder ID" oninput="filterArtikel(this.value)">
+  <select id="filter_admin_standort" onchange="filterArtikelExtended()">
+    <option value="">Alle Standorte</option>
+    ${[...new Set(artikel.map(a => a.standort || ""))].map(s => `<option value="${s}">${s}</option>`).join("")}
+  </select>
+
+  <select id="filter_admin_lagerplatz" onchange="filterArtikelExtended()">
+    <option value="">Alle Lagerplätze</option>
+    ${[...new Set(artikel.map(a => a.lagerplatz || ""))].map(l => `<option value="${l}">${l}</option>`).join("")}
+  </select>
+
+  <div class="card">
+    <h3>➕ Neuer Artikel</h3>
+    <input placeholder="ID" id="new_id">
+    <input placeholder="Name" id="new_name">
+    <input placeholder="Warengruppe" id="new_wg">
+    <input placeholder="Standort" id="new_standort">
+    <input placeholder="Lagerplatz" id="new_lp">
+    <button onclick="addArtikel()">Speichern</button>
+  </div>
+
+  <div id="artikelListe"></div>`;
+
+  document.getElementById("admin").innerHTML = html;
+
+  renderArtikelListe(artikel);
+}
+
+function filterArtikelExtended() {
+  const standort = document.getElementById("filter_admin_standort").value.toLowerCase();
+  const lagerplatz = document.getElementById("filter_admin_lagerplatz").value.toLowerCase();
+
+  const gefiltert = artikel.filter(a =>
+    (a.standort || "").toLowerCase().includes(standort) &&
+    (a.lagerplatz || "").toLowerCase().includes(lagerplatz)
+  );
+
+  renderArtikelListe(gefiltert);
+}
+
+function renderArtikelListe(liste) {
+  let html = "";
+
+  liste.forEach(a => {
     html += `
     <div class="card">
-      <b>${a.name}</b><br>
+      <b>ID: ${a.id}</b><br>
+      Name: ${a.name}<br>
       📍 ${a.lagerplatz}<br>
       Bestand: ${bestand(a.id)}
     </div>`;
   });
 
-  document.getElementById("admin").innerHTML = html;
+  document.getElementById("artikelListe").innerHTML = html;
+}
+
+function filterArtikel(suche) {
+  suche = suche.toLowerCase();
+
+  const gefiltert = artikel.filter(a =>
+    a.name.toLowerCase().includes(suche) ||
+    String(a.id).includes(suche)
+  );
+
+  renderArtikelListe(gefiltert);
+}
+
+async function addArtikel() {
+  const id = parseInt(document.getElementById("new_id").value);
+  const name = document.getElementById("new_name").value;
+  const warengruppe = document.getElementById("new_wg").value;
+  const standort = document.getElementById("new_standort").value;
+  const lagerplatz = document.getElementById("new_lp").value;
+
+  if (!id || !name) {
+    alert("ID und Name sind Pflicht!");
+    return;
+  }
+
+  const { error } = await client.from("artikel").insert({
+    id,
+    name,
+    warengruppe,
+    standort,
+    lagerplatz
+  });
+
+  if (error) {
+    alert("Fehler: " + error.message);
+  } else {
+    load();
+  }
 }
 
 // ---------------- EXPORT ----------------
@@ -187,13 +329,17 @@ function exportCSV() {
   a.click();
 }
 
-load();
+// ---------------- START ----------------
+window.addEventListener("DOMContentLoaded", () => {
+  load();
+});
 </script>
 
 </body>
 </html>
+
 <script>
-if ('serviceWorker' in navigator) {
+if (location.protocol.startsWith('http') && 'serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js');
 }
 </script>
