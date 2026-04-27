@@ -18,19 +18,29 @@ body {
 nav {
   display: flex;
   background: #333;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  z-index: 1000;
 }
 
 nav button {
   flex: 1;
-  padding: 15px;
+  padding: 10px 5px;
   color: white;
   background: none;
   border: none;
-  font-size: 16px;
-  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: 60px;
 }
 
 .tab {
+  margin-bottom: 80px; /* Platz für Bottom Navigation */
   display: none;
   padding: 10px;
 }
@@ -53,10 +63,10 @@ input, select, button {
 <body>
 
 <nav>
-  <button onclick="showTab('inventur')">📦 Inventur</button>
-  <button onclick="showTab('eingang')">➕ Eingang</button>
-  <button onclick="showTab('admin')">📊 Bestand</button>
-  <button onclick="showTab('export')">📤 Export</button>
+  <button onclick="showTab('inventur')">📦<br>Inventur</button>
+  <button onclick="showTab('eingang')">➕<br>Eingang</button>
+  <button onclick="showTab('admin')">📊<br>Bestand</button>
+  <button onclick="showTab('export')">📤<br>Export</button>
 </nav>
 
 <div id="inventur" class="tab"></div>
