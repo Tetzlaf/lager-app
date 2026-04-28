@@ -100,7 +100,7 @@ window.showTab = function(tab) {
 };
 
 // ---------------- LOAD ----------------
-async function load() {
+async function load(initialTab = null) {
   try {
     const { data: artikelData } = await client.from("artikel").select("*");
     const { data: bewegungenData } = await client.from("lagerbewegungen").select("*");
@@ -108,9 +108,14 @@ async function load() {
     artikel = artikelData || [];
     bewegungen = bewegungenData || [];
 
-    showTab("admin"); // 👉 Start jetzt Bestand
+    if (initialTab) {
+      showTab(initialTab);
+    }
 
   } catch (err) {
+    console.error("LOAD CRASH:", err);
+  }
+} catch (err) {
     console.error("LOAD CRASH:", err);
   }
 }
@@ -185,7 +190,8 @@ async function inventur(id, ist) {
     });
   }
 
-  load();
+  await load();
+  renderInventur(); // 👉 bleibt im Inventur-Tab
 }
 
 // ---------------- EINGANG ----------------
@@ -214,7 +220,8 @@ async function buchen(id) {
     typ: "wareneingang"
   });
 
-  load();
+  await load();
+  renderEingang(); // 👉 bleibt im Eingang
 }
 
 // ---------------- ADMIN + ARTIKEL HINZUFÜGEN ----------------
@@ -341,7 +348,7 @@ function exportCSV() {
 
 // ---------------- START ----------------
 window.addEventListener("DOMContentLoaded", () => {
-  load();
+  load("admin"); // Start nur einmal auf Bestand
 });
 </script>
 
