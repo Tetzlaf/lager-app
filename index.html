@@ -2,10 +2,9 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<title>Lager App</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#333333">
+<title>Lager App</title>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
 
@@ -13,49 +12,69 @@
 body {
   font-family: Arial;
   margin: 0;
+  background: #f5f5f5;
 }
 
+.tab {
+  display: none;
+  padding: 10px;
+  margin-bottom: 100px;
+}
+
+/* GRID = weniger scrollen */
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+/* Karten */
+.card {
+  background: white;
+  border-radius: 10px;
+  padding: 10px;
+  font-size: 14px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+}
+
+/* Inputs */
+input, select {
+  width: 100%;
+  padding: 10px;
+  margin: 6px 0;
+  font-size: 16px;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+}
+
+/* Buttons */
+button {
+  width: 100%;
+  padding: 10px;
+  margin-top: 6px;
+  font-size: 14px;
+  border-radius: 8px;
+  border: none;
+  background: #333;
+  color: white;
+}
+
+/* Bottom Navigation */
 nav {
   display: flex;
-  background: #333;
   position: fixed;
   bottom: 0;
-  left: 0;
   width: 100%;
-  z-index: 1000;
+  background: #333;
 }
 
 nav button {
   flex: 1;
-  padding: 14px 6px;
   color: white;
   background: none;
   border: none;
-  font-size: 16px; /* größer */
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  min-height: 80px; /* deutlich größere Touchfläche */
-}
-
-.tab {
-  margin-bottom: 80px; /* Platz für Bottom Navigation */
-  display: none;
-  padding: 10px;
-}
-
-input, select, button {
-  width: 100%;
-  padding: 12px;
-  margin: 5px 0;
-  font-size: 16px;
-}
-
-.card {
-  border: 1px solid #ccc;
-  padding: 10px;
-  margin: 10px 0;
+  font-size: 14px;
+  min-height: 70px;
 }
 </style>
 </head>
@@ -75,26 +94,36 @@ input, select, button {
 <div id="export" class="tab"></div>
 
 <script>
-// ---------------- SUPABASE ----------------
-const client = window.supabase.createClient(
+
+// 🔗 Supabase
+const client = supabase.createClient(
   "https://hptmgzugsfxbkxayoqwk.supabase.co",
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhwdG1nenVnc2Z4Ymt4YXlvcXdrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5Njc1OTEsImV4cCI6MjA5MjU0MzU5MX0.wqIL8sXUMF9E5PBdHMBcY6d6fvPeEzU93GG4PNT7h2Y"
+  "DEIN-ANON-KEY"
 );
 
 let artikel = [];
 let bewegungen = [];
 let currentTab = "admin";
 
-// ---------------- TAB SYSTEM ----------------
+// ---------------- LOAD ----------------
+async function load(tab = null) {
+  const { data: artikelData } = await client.from("artikel").select("*");
+  const { data: bewegungenData } = await client.from("lagerbewegungen").select("*");
+
+  artikel = artikelData || [];
+  bewegungen = bewegungenData || [];
+
+  if (tab) currentTab = tab;
+
+  showTab(currentTab);
+}
+
+// ---------------- TAB ----------------
 window.showTab = function(tab) {
   currentTab = tab;
 
-  document.querySelectorAll(".tab").forEach(el => {
-    el.style.display = "none";
-  });
-
-  const target = document.getElementById(tab);
-  if (target) target.style.display = "block";
+  document.querySelectorAll(".tab").forEach(t => t.style.display = "none");
+  document.getElementById(tab).style.display = "block";
 
   if (tab === "inventur") renderInventur();
   if (tab === "eingang") renderEingang();
@@ -102,52 +131,32 @@ window.showTab = function(tab) {
   if (tab === "export") renderExport();
 };
 
-// ---------------- LOAD ----------------
-async function load(initialTab = null) {
-  try {
-    const { data: artikelData } =
-      await client.from("artikel").select("*");
-
-    const { data: bewegungenData } =
-      await client.from("lagerbewegungen").select("*");
-
-    artikel = artikelData || [];
-    bewegungen = bewegungenData || [];
-
-    if (initialTab) currentTab = initialTab;
-
-    showTab(currentTab);
-
-  } catch (err) {
-    console.error("LOAD CRASH:", err);
-  }
-}
-
 // ---------------- HELPER ----------------
 function bestand(id) {
   return bewegungen
-    .filter(b => b.artikel_id === id)
+    .filter(b => b.artikel_id == id)
     .reduce((sum, b) => sum + b.menge, 0);
 }
 
 // ---------------- INVENTUR ----------------
 function renderInventur() {
-  let html = `<h2>📦 Inventur</h2>
+  let html = `
+    <h2>📦 Inventur</h2>
 
-  <select id="filter_standort" onchange="filterInventur()">
-    <option value="">Alle Standorte</option>
-    ${[...new Set(artikel.map(a => a.standort || ""))].map(s => `<option value="${s}">${s}</option>`).join("")}
-  </select>
+    <select id="f_standort" onchange="filterInventur()">
+      <option value="">Alle Standorte</option>
+      ${[...new Set(artikel.map(a => a.standort))].map(s => `<option>${s}</option>`).join("")}
+    </select>
 
-  <select id="filter_lagerplatz" onchange="filterInventur()">
-    <option value="">Alle Lagerplätze</option>
-    ${[...new Set(artikel.map(a => a.lagerplatz || ""))].map(l => `<option value="${l}">${l}</option>`).join("")}
-  </select>
+    <select id="f_lp" onchange="filterInventur()">
+      <option value="">Alle Lagerplätze</option>
+      ${[...new Set(artikel.map(a => a.lagerplatz))].map(l => `<option>${l}</option>`).join("")}
+    </select>
 
-  <div id="inventurListe"></div>`;
+    <div id="inventurListe" class="grid"></div>
+  `;
 
   document.getElementById("inventur").innerHTML = html;
-
   renderInventurListe(artikel);
 }
 
@@ -156,36 +165,38 @@ function renderInventurListe(liste) {
 
   liste.forEach(a => {
     html += `
-    <div class="card">
-      <b>ID: ${a.id}</b><br>
-      Name: ${a.name}<br>
-      📍 ${a.lagerplatz}<br>
-      Bestand: ${bestand(a.id)}<br>
-      Ist:
-      <input type="number" onchange="inventur(${a.id}, this.value)">
-    </div>`;
+      <div class="card">
+        <b>${a.name}</b>
+        <div>ID: ${a.id}</div>
+        <div>${a.lagerplatz}</div>
+        <div>Bestand: ${bestand(a.id)}</div>
+
+        <input type="number" placeholder="Menge"
+          onchange="inventur(${a.id}, this.value)">
+      </div>
+    `;
   });
 
   document.getElementById("inventurListe").innerHTML = html;
 }
 
 function filterInventur() {
-  const standort = document.getElementById("filter_standort").value.toLowerCase();
-  const lagerplatz = document.getElementById("filter_lagerplatz").value.toLowerCase();
+  const s = document.getElementById("f_standort").value;
+  const l = document.getElementById("f_lp").value;
 
   const gefiltert = artikel.filter(a =>
-    (a.standort || "").toLowerCase().includes(standort) &&
-    (a.lagerplatz || "").toLowerCase().includes(lagerplatz)
+    (!s || a.standort === s) &&
+    (!l || a.lagerplatz === l)
   );
 
   renderInventurListe(gefiltert);
 }
 
 async function inventur(id, ist) {
-  const aktuell = bestand(id);
-  const diff = ist - aktuell;
+  ist = parseInt(ist);
+  const diff = ist - bestand(id);
 
-  if (diff !== 0) {
+  if (!isNaN(diff) && diff !== 0) {
     await client.from("lagerbewegungen").insert({
       artikel_id: id,
       menge: diff,
@@ -193,96 +204,75 @@ async function inventur(id, ist) {
     });
   }
 
-  await load(); // 👉 bleibt im Inventur-Tab
+  load();
 }
 
 // ---------------- EINGANG ----------------
 function renderEingang() {
-  let html = `<h2>➕ Wareneingang</h2>`;
+  let html = `<h2>➕ Wareneingang</h2><div class="grid">`;
 
   artikel.forEach(a => {
     html += `
-    <div class="card">
-      <b>ID: ${a.id}</b><br>Name: ${a.name}<br>
-      Bestand: ${bestand(a.id)}<br>
-      <input type="number" id="m${a.id}">
-      <button onclick="buchen(${a.id})">Buchen</button>
-    </div>`;
+      <div class="card">
+        <b>${a.name}</b>
+        <div>Bestand: ${bestand(a.id)}</div>
+
+        <input type="number" id="m${a.id}" placeholder="Menge">
+        <button onclick="buchen(${a.id})">Buchen</button>
+      </div>
+    `;
   });
 
+  html += "</div>";
   document.getElementById("eingang").innerHTML = html;
 }
 
 async function buchen(id) {
-  const menge = document.getElementById("m" + id).value;
+  const menge = parseInt(document.getElementById("m"+id).value);
+
+  if (!menge || isNaN(menge)) {
+    alert("Menge eingeben");
+    return;
+  }
 
   await client.from("lagerbewegungen").insert({
     artikel_id: id,
-    menge: parseInt(menge),
+    menge: menge,
     typ: "wareneingang"
   });
 
-  await load(); // 👉 bleibt im Eingang
+  load();
 }
 
-// ---------------- ADMIN + ARTIKEL HINZUFÜGEN ----------------
+// ---------------- ADMIN ----------------
 function renderAdmin() {
-  let html = `<h2>📊 Bestand</h2>
+  let html = `
+    <h2>📊 Bestand</h2>
 
-  <input placeholder="🔍 Suche nach Name oder ID" oninput="filterArtikel(this.value)">
-  <select id="filter_admin_standort" onchange="filterArtikelExtended()">
-    <option value="">Alle Standorte</option>
-    ${[...new Set(artikel.map(a => a.standort || ""))].map(s => `<option value="${s}">${s}</option>`).join("")}
-  </select>
+    <input placeholder="🔍 Suche" oninput="filterArtikel(this.value)">
 
-  <select id="filter_admin_lagerplatz" onchange="filterArtikelExtended()">
-    <option value="">Alle Lagerplätze</option>
-    ${[...new Set(artikel.map(a => a.lagerplatz || ""))].map(l => `<option value="${l}">${l}</option>`).join("")}
-  </select>
-
-  <div class="card">
-    <h3>➕ Neuer Artikel</h3>
-    <input placeholder="ID" id="new_id">
-    <input placeholder="Name" id="new_name">
-    <input placeholder="Warengruppe" id="new_wg">
-    <input placeholder="Standort" id="new_standort">
-    <input placeholder="Lagerplatz" id="new_lp">
-    <button onclick="addArtikel()">Speichern</button>
-  </div>
-
-  <div id="artikelListe"></div>`;
+    <div id="liste" class="grid"></div>
+  `;
 
   document.getElementById("admin").innerHTML = html;
-
-  renderArtikelListe(artikel);
+  renderListe(artikel);
 }
 
-function filterArtikelExtended() {
-  const standort = document.getElementById("filter_admin_standort").value.toLowerCase();
-  const lagerplatz = document.getElementById("filter_admin_lagerplatz").value.toLowerCase();
-
-  const gefiltert = artikel.filter(a =>
-    (a.standort || "").toLowerCase().includes(standort) &&
-    (a.lagerplatz || "").toLowerCase().includes(lagerplatz)
-  );
-
-  renderArtikelListe(gefiltert);
-}
-
-function renderArtikelListe(liste) {
+function renderListe(liste) {
   let html = "";
 
   liste.forEach(a => {
     html += `
-    <div class="card">
-      <b>ID: ${a.id}</b><br>
-      Name: ${a.name}<br>
-      📍 ${a.lagerplatz}<br>
-      Bestand: ${bestand(a.id)}
-    </div>`;
+      <div class="card">
+        <b>${a.name}</b>
+        <div>ID: ${a.id}</div>
+        <div>${a.lagerplatz}</div>
+        <div>Bestand: ${bestand(a.id)}</div>
+      </div>
+    `;
   });
 
-  document.getElementById("artikelListe").innerHTML = html;
+  document.getElementById("liste").innerHTML = html;
 }
 
 function filterArtikel(suche) {
@@ -293,52 +283,25 @@ function filterArtikel(suche) {
     String(a.id).includes(suche)
   );
 
-  renderArtikelListe(gefiltert);
-}
-
-async function addArtikel() {
-  const id = parseInt(document.getElementById("new_id").value);
-  const name = document.getElementById("new_name").value;
-  const warengruppe = document.getElementById("new_wg").value;
-  const standort = document.getElementById("new_standort").value;
-  const lagerplatz = document.getElementById("new_lp").value;
-
-  if (!id || !name) {
-    alert("ID und Name sind Pflicht!");
-    return;
-  }
-
-  const { error } = await client.from("artikel").insert({
-    id,
-    name,
-    warengruppe,
-    standort,
-    lagerplatz
-  });
-
-  if (error) {
-    alert("Fehler: " + error.message);
-  } else {
-    load();
-  }
+  renderListe(gefiltert);
 }
 
 // ---------------- EXPORT ----------------
 function renderExport() {
   document.getElementById("export").innerHTML = `
-    <h2>📤 Export</h2>
+    <h2>Export</h2>
     <button onclick="exportCSV()">CSV Export</button>
   `;
 }
 
 function exportCSV() {
-  let csv = "Name;Lagerplatz;Bestand\n";
+  let csv = "Name;Bestand\n";
 
   artikel.forEach(a => {
-    csv += `${a.name};${a.lagerplatz};${bestand(a.id)}\n`;
+    csv += `${a.name};${bestand(a.id)}\n`;
   });
 
-  const blob = new Blob([csv], { type: "text/csv" });
+  const blob = new Blob([csv]);
   const url = URL.createObjectURL(blob);
 
   const a = document.createElement("a");
@@ -348,16 +311,9 @@ function exportCSV() {
 }
 
 // ---------------- START ----------------
-window.addEventListener("DOMContentLoaded", () => {
-  load("admin"); // Start nur einmal auf Bestand
-});
+load("admin");
+
 </script>
 
 </body>
 </html>
-
-<script>
-if (location.protocol.startsWith('http') && 'serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js');
-}
-</script>
