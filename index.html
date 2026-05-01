@@ -83,9 +83,12 @@ const client = window.supabase.createClient(
 
 let artikel = [];
 let bewegungen = [];
+let currentTab = "admin";
 
 // ---------------- TAB SYSTEM ----------------
 window.showTab = function(tab) {
+  currentTab = tab;
+
   document.querySelectorAll(".tab").forEach(el => {
     el.style.display = "none";
   });
@@ -102,20 +105,20 @@ window.showTab = function(tab) {
 // ---------------- LOAD ----------------
 async function load(initialTab = null) {
   try {
-    const { data: artikelData } = await client.from("artikel").select("*");
-    const { data: bewegungenData } = await client.from("lagerbewegungen").select("*");
+    const { data: artikelData } =
+      await client.from("artikel").select("*");
+
+    const { data: bewegungenData } =
+      await client.from("lagerbewegungen").select("*");
 
     artikel = artikelData || [];
     bewegungen = bewegungenData || [];
 
-    if (initialTab) {
-      showTab(initialTab);
-    }
+    if (initialTab) currentTab = initialTab;
+
+    showTab(currentTab);
 
   } catch (err) {
-    console.error("LOAD CRASH:", err);
-  }
-} catch (err) {
     console.error("LOAD CRASH:", err);
   }
 }
@@ -190,8 +193,7 @@ async function inventur(id, ist) {
     });
   }
 
-  await load();
-  renderInventur(); // 👉 bleibt im Inventur-Tab
+  await load(); // 👉 bleibt im Inventur-Tab
 }
 
 // ---------------- EINGANG ----------------
@@ -220,8 +222,7 @@ async function buchen(id) {
     typ: "wareneingang"
   });
 
-  await load();
-  renderEingang(); // 👉 bleibt im Eingang
+  await load(); // 👉 bleibt im Eingang
 }
 
 // ---------------- ADMIN + ARTIKEL HINZUFÜGEN ----------------
